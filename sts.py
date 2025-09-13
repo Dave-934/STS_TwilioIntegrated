@@ -1,186 +1,156 @@
-# import asyncio
-# import os
-# from dotenv import load_dotenv
-
-# from vocode.helpers import create_streaming_microphone_input_and_speaker_output
-# from vocode.streaming.streaming_conversation import StreamingConversation
-# from vocode.streaming.models.message import BaseMessage
-# from vocode.streaming.models.agent import ChatGPTAgentConfig
-# from vocode.streaming.agent.chat_gpt_agent import ChatGPTAgent
-# from vocode.streaming.models.transcriber import DeepgramTranscriberConfig
-# from vocode.streaming.transcriber.deepgram_transcriber import DeepgramTranscriber
-# from vocode.streaming.models.transcriber import PunctuationEndpointingConfig
-# from vocode.streaming.models.synthesizer import ElevenLabsSynthesizerConfig
-# from vocode.streaming.synthesizer.eleven_labs_synthesizer import ElevenLabsSynthesizer
-# from vocode.streaming.models.audio import SamplingRate, AudioEncoding
-
-
-# load_dotenv()
-
-# async def main():
-#     microphone_input, speaker_output = create_streaming_microphone_input_and_speaker_output(
-#         use_default_devices=True,  # Set to True to use default input/output devices
-#         # output_device_index=10  # Airdopes 141 (Headset) --> Replace with your headphones device index
-#         )
-
-#     transcriber = DeepgramTranscriber(
-#         DeepgramTranscriberConfig.from_input_device(
-#             microphone_input,
-#             endpointing_config=PunctuationEndpointingConfig(   # enables endpointing(VAD) based on punctuation or enables punctuation-based speech end detection.
-#                 enabled=True,
-#                 punctuation_marks=[".", "!", "?"],
-#                 silence_duration_ms=1000,
-#                 min_speech_duration_ms=1000,
-#                 max_speech_duration_ms=10000,
-#             ),
-#             api_key=os.getenv("DEEPGRAM_API_KEY"),
-#             mute_during_speech=True,  # Add this line
-#         )
-#     )
-
-#     agent = ChatGPTAgent(
-#         ChatGPTAgentConfig(
-#             openai_api_key=os.getenv("OPENAI_API_KEY"),
-#             initial_message=BaseMessage(text="Hello! How can I help you today?"),
-#             prompt_preamble="You are a helpful conversational AI assistant."
-#         )
-#     )
-
-#     synthesizer_config = ElevenLabsSynthesizerConfig(
-#         api_key=os.getenv("ELEVENLABS_API_KEY"),
-#         voice_id="21m00Tcm4TlvDq8ikWAM",
-#         sampling_rate=SamplingRate.RATE_48000,      # for example, 16000 Hz
-#         audio_encoding=AudioEncoding.LINEAR16,       # example encoding
-#         output_device=speaker_output,
-#         stability=0.3,                               # value between 0 and 1 --> lower value for more natural voice
-#         similarity_boost=0.3                         # value between 0 and 1 --> lower value for less echo
-#     )
-#     synthesizer = ElevenLabsSynthesizer(synthesizer_config)
-#     # synthesizer.words_per_minute = 150  # Set the speech rate to 110 WPM (the default speed is 150 WPM)
-
-#     conversation = StreamingConversation(
-#         output_device=speaker_output,
-#         transcriber=transcriber,
-#         agent=agent,
-#         synthesizer=synthesizer,
-#         speed_coefficient=0.2,  # Adjust: higher = faster response, lower = slower
-#     )
-
-#     await conversation.start()
-#     print("Conversation started! Press Ctrl+C to stop.")
-
-#     try:
-#         while conversation.is_active():
-#             chunk = await microphone_input.get_audio()
-#             conversation.receive_audio(chunk)
-#     except KeyboardInterrupt:
-#         await conversation.terminate()
-
-# if __name__ == "__main__":
-#     asyncio.run(main())
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-import asyncio
 import os
-import signal
+import queue
+import asyncio
+import logging
+import requests
+import sounddevice as sd
+import numpy as np
+from pydub import AudioSegment
+from io import BytesIO
+from deepgram import Deepgram
 from dotenv import load_dotenv
+import time
 
-from vocode.helpers import create_streaming_microphone_input_and_speaker_output
-from vocode.logging import configure_pretty_logging
-from vocode.streaming.agent.chat_gpt_agent import ChatGPTAgent
-from vocode.streaming.models.agent import ChatGPTAgentConfig
-from vocode.streaming.models.message import BaseMessage
-from vocode.streaming.models.synthesizer import ElevenLabsSynthesizerConfig
-from vocode.streaming.synthesizer.eleven_labs_synthesizer import ElevenLabsSynthesizer
-from vocode.streaming.models.audio import SamplingRate, AudioEncoding
-from vocode.streaming.models.transcriber import (
-    DeepgramTranscriberConfig,
-    PunctuationEndpointingConfig,
-)
-from vocode.streaming.streaming_conversation import StreamingConversation
-from vocode.streaming.transcriber.deepgram_transcriber import DeepgramTranscriber
-
-
+# Load environment variables
 load_dotenv()
-configure_pretty_logging()
+
+# Set up logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# Constants
+SAMPLE_RATE = 16000
+CHANNELS = 1
+BLOCK_SIZE = 1024
+
+# API keys and endpoints from environment
+DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GEMINI_API_URL = "https://gemini.api.url/v1/generate"  # Replace with your Gemini endpoint
+ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
+ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID")
+ELEVENLABS_API_URL = f"https://api.elevenlabs.io/v1/text-to-speech/{ELEVENLABS_VOICE_ID}"
+
+# Initialize Deepgram client
+dg_client = Deepgram(DEEPGRAM_API_KEY)
+
+# Audio input queue
+q = queue.Queue()
+
+def audio_callback(indata, frames, time_info, status):
+    if status:
+        logging.warning(f"Sounddevice status: {status}")
+    q.put(indata.copy())
+
+async def deepgram_stream():
+    async with dg_client.transcription.live({
+        "punctuate": True,
+        "language": "en-US",
+        "vad": True,
+        "vad_sensitivity": 0.6,
+        "end_silence_timeout": 3.0
+    }) as dg_live:
+
+        async def send_audio():
+            while True:
+                data = await loop.run_in_executor(None, q.get)
+                await dg_live.send(data.tobytes())
+
+        send_task = asyncio.create_task(send_audio())
+
+        async for transcript in dg_live:
+            if transcript.get('channel', {}).get('alternatives'):
+                utterance = transcript['channel']['alternatives'][0]['transcript'].strip()
+                if utterance:
+                    yield utterance
+
+        await send_task
+
+def query_gemini(prompt_text):
+    headers = {
+        "Authorization": f"Bearer {GEMINI_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "prompt": prompt_text,
+        "max_tokens": 150,
+        "temperature": 0.7
+    }
+    response = requests.post(GEMINI_API_URL, headers=headers, json=payload)
+    response.raise_for_status()
+    data = response.json()
+    return data.get("text", "").strip()
+
+def elevenlabs_tts(text: str):
+    headers = {
+        "xi-api-key": ELEVENLABS_API_KEY,
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "text": text,
+        "voice_settings": {
+            "stability": 0.75,
+            "similarity_boost": 0.75
+        }
+    }
+    response = requests.post(ELEVENLABS_API_URL, headers=headers, json=payload)
+    response.raise_for_status()
+    audio_bytes = response.content
+    audio = AudioSegment.from_file(BytesIO(audio_bytes), format="mp3")
+    return audio
+
+def play_audio_segment(audio: AudioSegment):
+    data = np.array(audio.get_array_of_samples())
+    sd.play(data, audio.frame_rate)
+    sd.wait()
+
+def start_audio_stream():
+    stream = sd.InputStream(
+        samplerate=SAMPLE_RATE,
+        channels=CHANNELS,
+        blocksize=BLOCK_SIZE,
+        callback=audio_callback
+    )
+    stream.start()
+    return stream
 
 async def main():
-    (
-        microphone_input,
-        speaker_output,
-    ) = create_streaming_microphone_input_and_speaker_output(
-        use_default_devices=True
-    )
+    # Play welcome greeting
+    greeting = "Hello! How can I help you?"
+    logging.info("Playing greeting...")
+    audio = elevenlabs_tts(greeting)
+    play_audio_segment(audio)
 
-    conversation = StreamingConversation(
-        output_device=speaker_output,
-        transcriber=DeepgramTranscriber(
-            DeepgramTranscriberConfig.from_input_device(
-                microphone_input,
-                endpointing_config=PunctuationEndpointingConfig(),
-                api_key=os.getenv("DEEPGRAM_API_KEY"),
-            ),
-        ),
-        agent=ChatGPTAgent(
-            ChatGPTAgentConfig(
-                openai_api_key=os.getenv("OPENAI_API_KEY"),
-                initial_message=BaseMessage(text="Hello! How can I help you today?"),
-                prompt_preamble="""You are a helpful conversational AI assistant.""",
-            )
-        ),
-        synthesizer=ElevenLabsSynthesizer(
-            ElevenLabsSynthesizerConfig(
-                output_device=speaker_output,
-                api_key=os.getenv("ELEVENLABS_API_KEY"),
-                voice_id="21m00Tcm4TlvDq8ikWAM",
-                sampling_rate=SamplingRate.RATE_24000,  # <--- Use this! (# can use 16000, 22050, or 24000 also)
-                audio_encoding=AudioEncoding.LINEAR16,  # <--- Use this!
-                stability=0.3,                               # value between 0 and 1 --> lower value for more natural voice
-                similarity_boost=0.3                         # value between 0 and 1 --> lower value for less echo
-            )
-    ))
-    await conversation.start()
-    print("Conversation started, press Ctrl+C to end")
-    signal.signal(signal.SIGINT, lambda _0, _1: asyncio.create_task(conversation.terminate()))
-    while conversation.is_active():
-        chunk = await microphone_input.get_audio()
-        conversation.receive_audio(chunk)
+    stream = start_audio_stream()
+    global loop
+    loop = asyncio.get_running_loop()
 
+    try:
+        async for transcribed_text in deepgram_stream():
+            start_time_stt = time.time()
+            logging.info(f"STT Result: {transcribed_text}")
+
+            start_time_llm = time.time()
+            response_text = query_gemini(transcribed_text)
+            llm_time = time.time() - start_time_llm
+            logging.info(f"LLM Response: {response_text} (took {llm_time:.2f} s)")
+
+            start_time_tts = time.time()
+            audio_response = elevenlabs_tts(response_text)
+            tts_time = time.time() - start_time_tts
+
+            logging.info(f"TTS audio synthesized (took {tts_time:.2f} s)")
+            play_audio_segment(audio_response)
+
+            total_time = time.time() - start_time_stt
+            logging.info(f"Total roundtrip time: {total_time:.2f} s")
+
+            if not transcribed_text.strip():
+                logging.info("Interruption detected via VAD: silence or speech cut-off")
+
+    except Exception as e:
+        logging.error(f"Pipeline error: {e}")
+    finally:
+        stream.stop()
 
 if __name__ == "__main__":
     asyncio.run(main())
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
