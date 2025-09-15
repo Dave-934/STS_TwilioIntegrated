@@ -22,6 +22,10 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 SAMPLE_RATE = 16000
 CHANNELS = 1
 BLOCK_SIZE = 1024
+# --- ADD THIS ---
+# This is a tuning parameter. Higher values require the user to speak more loudly.
+# Lower values are more sensitive to interruption but may pick up more background noise.
+BARGE_IN_THRESHOLD = 0.02 
 
 # API keys and endpoints
 DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY")
@@ -43,12 +47,37 @@ playback_q = queue.Queue()
 # Event to signal streaming stop
 stop_event = threading.Event()
 
+# --- ADD THIS MISSING LINE ---
+# Event to signal when the bot is speaking
+bot_is_speaking = threading.Event()
+
 # ThreadPoolExecutor for running blocking API calls async-friendly
 executor = concurrent.futures.ThreadPoolExecutor(max_workers=2)
 
 def audio_callback(indata, frames, time_info, status):
     if status:
         logging.warning(f"Sounddevice status: {status}")
+
+    # The main logic for handling audio input
+    if bot_is_speaking.is_set():
+        # If the bot is speaking, we listen for a barge-in.
+        # We calculate the volume (RMS) of the incoming audio.
+        rms = np.sqrt(np.mean(indata**2))
+        
+        if rms < BARGE_IN_THRESHOLD:
+            # If the audio is quieter than the threshold, it's probably the bot's own echo.
+            # We ignore it and do nothing.
+            return
+        else:
+            # If the audio is louder, it's the user interrupting.
+            # We log it and let the audio pass through for processing.
+            logging.info("Barge-in detected! User is speaking.")
+    
+    # If we reach here, it's either:
+    # 1. The bot was silent and the user started speaking.
+    # 2. The bot was speaking but the user interrupted loudly.
+    # In both cases, we process the audio.
+
     if not np.any(indata):
         logging.debug("Microphone silence detected")
     else:
