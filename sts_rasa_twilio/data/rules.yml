@@ -11,3 +11,8 @@ rules:
   steps:
   - intent: bot_challenge
   - action: utter_iamabot
+
+- rule: Handle LLM Questions
+  steps:
+  - intent: ask_llm
+  - action: action_ask_gemini

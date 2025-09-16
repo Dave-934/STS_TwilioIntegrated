@@ -89,3 +89,13 @@ nlu:
     - are you a human?
     - am I talking to a bot?
     - am I talking to a human?
+
+- intent: ask_llm
+  examples: |
+    - what is the meaning of life?
+    - tell me about the roman empire
+    - why is the sky blue?
+    - can you explain quantum computing?
+    - who was the first person on the moon?
+    - write a short story about a robot
+    - what are the best restaurants near me
