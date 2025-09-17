@@ -1,9 +1,0 @@
-rasa==3.6.21
-twilio
-python-dotenv
-requests
-deepgram-sdk
-websockets
-fastapi
-uvicorn
-python-socketio
