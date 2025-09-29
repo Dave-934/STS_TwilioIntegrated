@@ -1,5 +1,6 @@
 import os
 from dotenv import load_dotenv
+from pathlib import Path  # Import the Path library
 
 from livekit import agents
 from livekit.agents import AgentSession, Agent
@@ -11,8 +12,12 @@ from livekit.plugins import (
 )
 from livekit.plugins.turn_detector.english import EnglishModel
 
-load_dotenv()
-
+# --- THE FIX ---
+# Build an absolute path to the .env file in your project's root directory
+# This is the most reliable way to load the variables
+dotenv_path = Path(__file__).resolve().parent / '.env'
+load_dotenv(dotenv_path=dotenv_path)
+# --- END OF THE FIX ---
 
 class Assistant(Agent):
     def __init__(self) -> None:

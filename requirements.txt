@@ -1,2 +1,5 @@
 python-dotenv 
-livekit-agents[deepgram,google,elevenlabs,silero,turn_detector]~=1.2
+livekit
+livekit-agents[deepgram,google,elevenlabs,silero,turn_detector]
+# torch
+# torchaudio

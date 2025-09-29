@@ -1,0 +1,6 @@
+services:
+  telephony_agent:
+    build: .
+    restart: on-failure
+    env_file:
+      - .env
