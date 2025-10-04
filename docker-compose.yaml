@@ -4,3 +4,8 @@ services:
     restart: on-failure
     env_file:
       - .env
+    volumes:
+      - huggingface_cache:/root/.cache/huggingface/hub
+
+volumes:
+  huggingface_cache:
