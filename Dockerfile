@@ -7,11 +7,10 @@ WORKDIR /app
 # Install uv, the fast package installer
 RUN pip install uv
 
-# --- THE FIX ---
-# Step 1: Install the small, CPU-only version of PyTorch. This avoids the large NVIDIA packages.
+# Install the small, CPU-only version of PyTorch. This avoids the large NVIDIA packages.
 RUN uv pip install --system --no-cache-dir torch torchaudio --index-url https://download.pytorch.org/whl/cpu
 
-# Step 2: Install the rest of the packages from your updated requirements.txt
+# Install the rest of the packages from your updated requirements.txt
 COPY requirements.txt .
 RUN uv pip install --system --no-cache-dir -r requirements.txt
 
