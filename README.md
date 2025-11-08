@@ -1,16 +1,16 @@
 # STS_TwilioIntegrated
 
-A Speech-to-Speech (STS) AI Voice Agent system with Twilio integration for real-time telephony conversations. This project enables natural voice interactions using LiveKit, OpenAI, and Twilio services.
+A Speech-to-Speech (STS) AI Voice Agent system with Twilio integration for real-time telephony conversations. This project enables natural voice interactions using LiveKit, Google Gemini, and Twilio services.
 
 ## Overview
 
-STS_TwilioIntegrated is a sophisticated voice AI agent that can engage in natural conversations through phone calls. The system leverages LiveKit's real-time communication framework, OpenAI's language models for intelligent responses, and Twilio for telephony integration. It supports both console-based testing and live phone call interactions.
+STS_TwilioIntegrated is a sophisticated voice AI agent that can engage in natural conversations through phone calls. The system leverages LiveKit's real-time communication framework, Google Gemini's language models for intelligent responses, and Twilio for telephony integration. It supports both console-based testing and live phone call interactions.
 
 ## Features
 
 - **Real-time Voice Conversations**: Seamless speech-to-speech interactions with low latency
 - **Twilio Integration**: Make and receive phone calls through Twilio's telephony platform
-- **OpenAI Integration**: Intelligent conversational AI powered by OpenAI's language models
+- **Google Gemini Integration**: Intelligent conversational AI powered by Google Gemini's language models
 - **LiveKit Framework**: Robust real-time communication infrastructure
 - **Multiple Modes**: Console agent for testing and telephony agent for production calls
 - **Docker Support**: Containerized deployment for easy setup and scalability
@@ -35,7 +35,7 @@ STS_TwilioIntegrated/
 - Docker and Docker Compose (for containerized deployment)
 - LiveKit server instance
 - Twilio account with phone number
-- OpenAI API key
+- Google Gemini API key
 
 ## Installation
 
@@ -66,9 +66,8 @@ STS_TwilioIntegrated/
    LIVEKIT_API_KEY=your_api_key
    LIVEKIT_API_SECRET=your_api_secret
    
-   # OpenAI Configuration
-   OPENAI_API_KEY=your_openai_api_key
-   
+   # Google Gemini Configuration
+GOOGLE_GEMINI_API_KEY=your_google_gemini_api_key   
    # Twilio Configuration (for telephony_agent.py)
    TWILIO_ACCOUNT_SID=your_twilio_account_sid
    TWILIO_AUTH_TOKEN=your_twilio_auth_token
@@ -127,7 +126,7 @@ This mode provides:
 Both agents support various configuration options through environment variables:
 
 - **Voice Settings**: Customize voice models and parameters
-- **Language Models**: Configure OpenAI model selection and parameters
+- **Language Models**: Configure Google Gemini model selection and parameters
 - **Audio Quality**: Adjust sampling rates and encoding
 - **Logging**: Control verbosity and log output
 
@@ -137,7 +136,7 @@ Key dependencies include:
 
 - **livekit**: Real-time communication framework
 - **livekit-agents**: Agent framework for LiveKit
-- **livekit-plugins-openai**: OpenAI integration for LiveKit
+- **livekit-plugins-Google Gemini**: Google Gemini integration for LiveKit
 - **livekit-plugins-silero**: Voice Activity Detection (VAD)
 - **twilio**: Twilio API for telephony services
 - **python-dotenv**: Environment variable management
@@ -150,7 +149,7 @@ For a complete list, see `requirements.txt`.
 ### Console Agent
 - Connects to LiveKit room for audio streaming
 - Processes audio input from microphone
-- Uses OpenAI for speech recognition and response generation
+- Uses Google Gemini for speech recognition and response generation
 - Outputs synthesized speech to speakers
 
 ### Telephony Agent
@@ -175,7 +174,7 @@ python console_agent.py
 - **Agent Initialization**: Both scripts initialize LiveKit agents with necessary plugins
 - **Event Handlers**: Define callbacks for connection, disconnection, and errors
 - **Audio Processing**: Handle audio streams with appropriate codecs and processing
-- **AI Integration**: Configure and manage OpenAI model interactions
+- **AI Integration**: Configure and manage Google Gemini model interactions
 
 ### Debugging
 
@@ -244,7 +243,7 @@ Would love to have some amazing contributions!
 - Check Twilio account credentials
 - Review Twilio console logs for errors
 
-**OpenAI API**
+**Google Gemini API**
 - Verify API key is valid and has sufficient credits
 - Check rate limits and quota usage
 - Review API error responses
@@ -256,7 +255,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 ## Acknowledgments
 
 - **LiveKit** for the real-time communication framework
-- **OpenAI** for AI/ML capabilities
+- **Google Gemini** for AI/ML capabilities
 - **Twilio** for telephony services
 - All contributors and maintainers
 
